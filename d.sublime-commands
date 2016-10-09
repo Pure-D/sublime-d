@@ -1,0 +1,3 @@
+[
+	{ "caption": "sublime-d: Go To Definition", "command": "sublimed_goto_definition" }
+]
