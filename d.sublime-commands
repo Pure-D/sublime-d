@@ -1,4 +1,5 @@
 [
 	{ "caption": "sublime-d: Go To Definition", "command": "sublimed_goto_definition" },
-	{ "caption": "sublime-d: Outline Document", "command": "sublimed_outline_document" }
+	{ "caption": "sublime-d: Outline Document", "command": "sublimed_outline_document" },
+	{ "caption": "sublime-d: Format Code", "command": "sublimed_format_code" }
 ]

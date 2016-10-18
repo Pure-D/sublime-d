@@ -99,6 +99,7 @@ class WorkspaceD:
 
 				self.setupDCD()
 				self.setupDScanner()
+				self.setupDfmt()
 			self.request({"cmd": "load", "components": ["dub"], "dir": self.projectRoot}, dubCallback)
 		else:
 			self.setupCustomWorkspace()
@@ -114,6 +115,9 @@ class WorkspaceD:
 				sublime.error_message("Could not initialize fsworkspace. See console for details!")
 				return
 			print("fsworkspace is ready")
+			self.setupDCD()
+			self.setupDScanner()
+			self.setupDfmt()
 		this.request({"cmd": "load", "components": ["fsworkspace"], "dir": rootDir, "additionalPaths": addPaths}, fsworkspaceCallback)
 
 	def processMessage(self):
@@ -150,6 +154,19 @@ class WorkspaceD:
 			"dir": self.projectRoot,
 			"dscannerPath": "dscanner"
 		}, dscannerCallback)
+
+	def setupDfmt(self):
+		def dfmtCallback(err, data):
+			if err:
+				sublime.error_message("Could not initialize Dfmt. See console for details!")
+				return
+			print("Dfmt is ready")
+		self.request({
+			"cmd": "load",
+			"components": ["dfmt"],
+			"dir": self.projectRoot,
+			"dfmtPath": "dfmt"
+		}, dfmtCallback)
 
 	def setupDCD(self):
 		if self.window.active_view().settings().get("d_disable_dcd", False):
@@ -396,6 +413,39 @@ class SublimedOutlineDocumentCommand(sublime_plugin.TextCommand):
 			"subcmd": "list-definitions",
 			"file": filename
 		}, outlineCallback)
+
+class SublimedFormatCodeCommand(sublime_plugin.TextCommand):
+	def run(self, edit):
+		filename = self.view.file_name()
+		window = self.view.window()
+		instance = get_workspaced(filename, window, True)
+		if not instance:
+			return
+		print("Format Code")
+		everything = sublime.Region(0, self.view.size())
+		canReturn = False
+		data = None
+		def formatCallback(err, formatted):
+			nonlocal canReturn
+			nonlocal data
+			if err:
+				canReturn = True
+				return
+			canReturn = True
+			data = formatted
+		instance.request({
+			"cmd": "dfmt",
+			"code": self.view.substr(everything)
+		}, formatCallback)
+		startTime = time.time()
+		while not canReturn:
+			if time.time() - startTime < 0.2: # code formatting shouldnt take longer than 200ms
+				continue
+			else:
+				print("Aborted formatting")
+				break
+		if data != None:
+			self.view.replace(edit, everything, data)
 
 def plugin_loaded():
 	window = sublime.active_window()
