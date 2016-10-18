@@ -211,59 +211,90 @@ class WorkspaceDCompletion(sublime_plugin.EventListener):
 	def on_query_completions(self, view, prefix, locations):
 		filename = view.file_name()
 		window = view.window()
-		if filename[-2:] == ".d":
-			for folder in window.folders():
-				if folder in workspaced:
-					if (filename.startswith(folder)):
-						completions = []
-						instance = workspaced[folder]
-						location = locations[0]
-						offset = location
-						completionDone = False
-						def completionCallback(err, data):
-							nonlocal completions
-							nonlocal completionDone
-							completionDone = True
-							if err:
-								return
-							if (data["type"] == "identifiers"):
-								for element in data["identifiers"]:
-									completion = element["identifier"]
-									detail = element["type"]
-									completions += [[completion + "\t" + detail, completion]]
-						instance.request({
-							"cmd": "dcd",
-							"subcmd": "list-completion",
-							"code": view.substr(sublime.Region(0, view.size())),
-							"pos": offset
-						}, completionCallback)
-						startTime = time.time()
-						while not completionDone:
-							if time.time() - startTime < 0.25:
-								continue
-							else:
-								break
-						return completions, sublime.INHIBIT_WORD_COMPLETIONS | sublime.INHIBIT_EXPLICIT_COMPLETIONS
-		return None
+		instance = get_workspaced(filename, window)
+		if not instance:
+			return None
+		completions = []
+		location = locations[0]
+		offset = location
+		completionDone = False
+		def completionCallback(err, data):
+			nonlocal completions
+			nonlocal completionDone
+			completionDone = True
+			if err:
+				return
+			if (data["type"] == "identifiers"):
+				for element in data["identifiers"]:
+					completion = element["identifier"]
+					detail = element["type"]
+					completions += [[completion + "\t" + detail, completion]]
+		instance.request({
+			"cmd": "dcd",
+			"subcmd": "list-completion",
+			"code": view.substr(sublime.Region(0, view.size())),
+			"pos": offset
+		}, completionCallback)
+		startTime = time.time()
+		while not completionDone:
+			if time.time() - startTime < 0.05: # at least run at 20 fps if completion isnt working
+				continue
+			else:
+				break
+		return completions, sublime.INHIBIT_WORD_COMPLETIONS | sublime.INHIBIT_EXPLICIT_COMPLETIONS
 
 	def on_hover(self, view, point, hover_zone):
 		filename = view.file_name()
 		window = view.window()
-		if hover_zone == sublime.HOVER_TEXT and filename[-2:] == ".d":
-			for folder in window.folders():
-				if folder in workspaced:
-					if (filename.startswith(folder)):
-						instance = workspaced[folder]
-						def hoverCallback(err, documentation):
-							if err:
-								return
-							view.show_popup(documentation.replace("\n", "<br>"), sublime.COOPERATE_WITH_AUTO_COMPLETE | sublime.HIDE_ON_MOUSE_MOVE_AWAY, point)
-						instance.request({
-							"cmd": "dcd",
-							"subcmd": "get-documentation",
-							"code": view.substr(sublime.Region(0, view.size())),
-							"pos": point
-						}, hoverCallback)
+		if hover_zone == sublime.HOVER_TEXT:
+			instance = get_workspaced(filename, window)
+			if not instance:
+				return
+			def hoverCallback(err, documentation):
+				if err:
+					return
+				view.show_popup(documentation.replace("\n", "<br>"), sublime.COOPERATE_WITH_AUTO_COMPLETE | sublime.HIDE_ON_MOUSE_MOVE_AWAY, point)
+			instance.request({
+				"cmd": "dcd",
+				"subcmd": "get-documentation",
+				"code": view.substr(sublime.Region(0, view.size())),
+				"pos": point
+			}, hoverCallback)
+
+	def on_modified_async(self, view):
+		position = view.sel()[0].begin()
+		typedChar = view.substr(position - 1)
+		if typedChar == "(" or typedChar == ",":
+			filename = view.file_name()
+			window = view.window()
+			instance = get_workspaced(filename, window)
+			if not instance:
+				return
+			filename = view.file_name()
+			window = view.window()
+			def calltipCallback(err, data):
+				if err:
+					return
+				if (data["type"] == "calltips"):
+					calltips = data["calltips"]
+					view.show_popup("<br>".join(calltips), sublime.COOPERATE_WITH_AUTO_COMPLETE, position)
+			print("calltips")
+			instance.request({
+				"cmd": "dcd",
+				"subcmd": "list-completion",
+				"code": view.substr(sublime.Region(0, view.size())),
+				"pos": position
+			}, calltipCallback)
+		if typedChar == ")":
+			view.hide_popup()
+
+def get_workspaced(filename, window):
+	if filename[-2:] == ".d":
+		for folder in window.folders():
+			if folder in workspaced:
+				if (filename.startswith(folder)):
+					return workspaced[folder]
+	return None
 
 class SublimedGotoDefinitionCommand(sublime_plugin.TextCommand):
 	def run(self, edit):
