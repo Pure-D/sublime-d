@@ -1,0 +1,10 @@
+[
+	{
+		"keys": ["shift+alt+f"],
+		"command": "sublimed_format_code"
+	},
+	{
+		"keys": ["ctrl+shift+o"],
+		"command": "sublimed_outline_document"
+	}
+]
