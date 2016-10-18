@@ -98,6 +98,7 @@ class WorkspaceD:
 				self.dubReady = True
 
 				self.setupDCD()
+				self.setupDScanner()
 			self.request({"cmd": "load", "components": ["dub"], "dir": self.projectRoot}, dubCallback)
 		else:
 			self.setupCustomWorkspace()
@@ -136,6 +137,19 @@ class WorkspaceD:
 					self.callbacks[reqID](None, data)
 			return True
 		return False
+
+	def setupDScanner(self):
+		def dscannerCallback(err, data):
+			if err:
+				sublime.error_message("Could not initialize DScanner. See console for details!")
+				return
+			print("DScanner is ready")
+		self.request({
+			"cmd": "load",
+			"components": ["dscanner"],
+			"dir": self.projectRoot,
+			"dscannerPath": "dscanner"
+		}, dscannerCallback)
 
 	def setupDCD(self):
 		if self.window.active_view().settings().get("d_disable_dcd", False):
@@ -288,11 +302,11 @@ class WorkspaceDCompletion(sublime_plugin.EventListener):
 		if typedChar == ")":
 			view.hide_popup()
 
-def get_workspaced(filename, window):
+def get_workspaced(filename, window, ignoreFolder = False):
 	if filename[-2:] == ".d":
 		for folder in window.folders():
 			if folder in workspaced:
-				if (filename.startswith(folder)):
+				if (ignoreFolder or filename.startswith(folder)):
 					return workspaced[folder]
 	return None
 
@@ -324,6 +338,64 @@ class SublimedGotoDefinitionCommand(sublime_plugin.TextCommand):
 			"code": self.view.substr(sublime.Region(0, self.view.size())),
 			"pos": point
 		}, definitionCallback)
+
+class SublimedOutlineDocumentCommand(sublime_plugin.TextCommand):
+	def run(self, edit):
+		print("Outline Document")
+		filename = self.view.file_name()
+		window = self.view.window()
+		instance = get_workspaced(filename, window, True)
+		if not instance:
+			return
+		point = self.view.sel()[0].begin()
+		def outlineCallback(err, definitions):
+			if err:
+				return
+			items = []
+			lines = []
+
+			for element in sorted(definitions, key=lambda e: e["line"]):
+				container = None
+				if "attributes" in element:
+					if "struct" in element["attributes"]:
+						container = element["attributes"]["struct"]
+					if "class" in element["attributes"]:
+						container = element["attributes"]["class"]
+					if "enum" in element["attributes"]:
+						container = element["attributes"]["enum"]
+					if "union" in element["attributes"]:
+						container = element["attributes"]["union"]
+				label = element["name"]
+				if "signature" in element:
+					label += element["signature"]
+				if container:
+					label = container + ":  " + label
+				label = element["type"] + "\t" + label
+				items += [label]
+				lines += [element["line"] - 1]
+
+			origPos = self.view.viewport_position()
+			origSel = list(self.view.sel())
+
+			def onDone(index):
+				if index == -1:
+					self.view.set_viewport_position(origPos, False)
+					self.view.sel().clear()
+					self.view.sel().add_all(origSel)
+
+			def previewSelection(index):
+				point = self.view.text_point(lines[index], 0)
+				line = self.view.line(point)
+				self.view.sel().clear()
+				self.view.sel().add(line)
+				self.view.show_at_center(point)
+
+			window.show_quick_panel(items, onDone, sublime.MONOSPACE_FONT, 0, previewSelection)
+		instance.request({
+			"cmd": "dscanner",
+			"subcmd": "list-definitions",
+			"file": filename
+		}, outlineCallback)
 
 def plugin_loaded():
 	window = sublime.active_window()
