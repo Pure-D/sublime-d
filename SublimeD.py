@@ -301,31 +301,29 @@ class SublimedGotoDefinitionCommand(sublime_plugin.TextCommand):
 		print("Goto Definition")
 		filename = self.view.file_name()
 		window = self.view.window()
-		if filename[-2:] == ".d":
-			for folder in window.folders():
-				if folder in workspaced:
-					if (filename.startswith(folder)):
-						instance = workspaced[folder]
-						point = self.view.sel()[0].begin()
-						def definitionCallback(err, declaration):
-							if err:
-								return
-							if declaration[0] == "stdin":
-								declaration[0] = self.view.file_name()
-							targetView = window.find_open_file(declaration[0])
-							if targetView == None:
-								targetView = window.open_file(declaration[0], sublime.TRANSIENT)
-							def jumpTo():
-								targetView.show_at_center(declaration[1])
-								targetView.sel().clear()
-								targetView.sel().add(sublime.Region(declaration[1], declaration[1]))
-							sublime.set_timeout(jumpTo, 100)
-						instance.request({
-							"cmd": "dcd",
-							"subcmd": "find-declaration",
-							"code": self.view.substr(sublime.Region(0, self.view.size())),
-							"pos": point
-						}, definitionCallback)
+		instance = get_workspaced(filename, window)
+		if not instance:
+			return
+		point = self.view.sel()[0].begin()
+		def definitionCallback(err, declaration):
+			if err:
+				return
+			if declaration[0] == "stdin":
+				declaration[0] = self.view.file_name()
+			targetView = window.find_open_file(declaration[0])
+			if targetView == None:
+				targetView = window.open_file(declaration[0], sublime.TRANSIENT)
+			def jumpTo():
+				targetView.show_at_center(declaration[1])
+				targetView.sel().clear()
+				targetView.sel().add(sublime.Region(declaration[1], declaration[1]))
+			sublime.set_timeout(jumpTo, 100)
+		instance.request({
+			"cmd": "dcd",
+			"subcmd": "find-declaration",
+			"code": self.view.substr(sublime.Region(0, self.view.size())),
+			"pos": point
+		}, definitionCallback)
 
 def plugin_loaded():
 	window = sublime.active_window()
