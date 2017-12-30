@@ -99,7 +99,7 @@ class WorkspaceD:
 
 				self.setupDCD()
 				self.setupDScanner()
-				self.setupDfmt()
+				# self.setupDfmt()
 			self.request({"cmd": "load", "components": ["dub"], "dir": self.projectRoot}, dubCallback)
 		else:
 			self.setupCustomWorkspace()
@@ -117,7 +117,7 @@ class WorkspaceD:
 			print("fsworkspace is ready")
 			self.setupDCD()
 			self.setupDScanner()
-			self.setupDfmt()
+			# self.setupDfmt()
 		this.request({"cmd": "load", "components": ["fsworkspace"], "dir": rootDir, "additionalPaths": addPaths}, fsworkspaceCallback)
 
 	def processMessage(self):
@@ -449,7 +449,11 @@ class SublimedFormatCodeCommand(sublime_plugin.TextCommand):
 
 def plugin_loaded():
 	window = sublime.active_window()
-	if window.active_view().settings().get("d", False):
+
+	project_data = sublime.active_window().project_data()
+	project_folder = project_data['folders'][0]['path']
+	
+	if(os.path.isfile(project_folder+'/dub.json')):
 		start_sublimed(window)
 
 def start_sublimed(window):
